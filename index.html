@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Thermos Lid Control</title>
+    <title>แก้วน้ำอัจฉริยะ ช่วยเตือนการกินยา</title>
     <style>
         :root {
             --primary-color: #0ea5e9;
@@ -105,7 +105,7 @@
 <body>
 
 <div class="container">
-    <h2>Smart Thermos Lid</h2>
+    <h2>แก้วน้ำอัจฉริยะ ช่วยเตือนการกินยา</h2>
     
     <div class="status-badge">
         <div id="statusDot" class="dot"></div>
@@ -121,9 +121,12 @@
 </div>
 
 <script>
-    // UUIDs ตามโค้ดเฟิร์มแวร์ ESP32-C3 ของคุณ
+    // UUIDs สำหรับเชื่อมต่อกับ ESP32-C3
     const SERVICE_UUID = "42a70001-e29f-412f-a2e6-7b5c87c0e001";
     const TIME_SYNC_CHAR_UUID = "42a70002-e29f-412f-a2e6-7b5c87c0e001";
+
+    // ชื่ออุปกรณ์บลูทูธที่ตั้งไว้ตรงกับฝั่ง ESP32
+    const DEVICE_NAME = "Smart-Thermos-Lid";
 
     let bluetoothDevice;
     let timeCharacteristic;
@@ -136,10 +139,10 @@
 
     async function connectBluetooth() {
         try {
-            log("กำลังค้นหาอุปกรณ์ Smart-Thermos-Lid...");
+            log("กำลังค้นหาอุปกรณ์ " + DEVICE_NAME + "...");
             
             bluetoothDevice = await navigator.bluetooth.requestDevice({
-                filters: [{ name: 'Smart-Thermos-Lid' }],
+                filters: [{ name: DEVICE_NAME }],
                 optionalServices: [SERVICE_UUID]
             });
 
@@ -154,57 +157,11 @@
             log("กำลังดึง Characteristic สำหรับซิงค์เวลา...");
             timeCharacteristic = await service.getCharacteristic(TIME_SYNC_CHAR_UUID);
 
-            // เปลี่ยนสถานะ UI
+            // อัปเดตสถานะ UI หน้าเว็บ
             document.getElementById('statusDot').classList.add('connected');
             document.getElementById('statusText').innerText = 'เชื่อมต่อสำเร็จ';
             document.getElementById('connectBtn').innerText = 'ยกเลิกการเชื่อมต่อ';
-            document.getElementById('connectBtn').onclick = disconnectBluetooth;
-            document.getElementById('syncBtn').disabled = false;
-
-            log("เชื่อมต่อสำเร็จพร้อมใช้งาน!");
-
-        } catch (error) {
-            log("เกิดข้อผิดพลาด: " + error);
-        }
-    }
-
-    async function syncTime() {
-        if (!timeCharacteristic) {
-            alert("ยังไม่ได้เชื่อมต่อบลูทูธ!");
-            return;
-        }
-        try {
-            // ดึงค่า Unix Timestamp ปัจจุบัน (หน่วยวินาที)
-            let currentTimestamp = Math.floor(Date.now() / 1000);
-            
-            // แปลงเป็น ArrayBuffer (uint32_t 4 ไบต์) ตามโค้ดเฟิร์มแวร์ ESP32
-            let buffer = new ArrayBuffer(4);
-            let view = new DataView(buffer);
-            view.setUint32(0, currentTimestamp, true); // true = Little Endian
-
-            await timeCharacteristic.writeValue(buffer);
-            log("ซิงค์เวลา Unix Timestamp (" + currentTimestamp + ") สำเร็จ!");
-            alert("ซิงค์เวลาไปยังฝาแก้วเรียบร้อยแล้ว!");
-        } catch (error) {
-            log("ซิงค์เวลาล้มเหลว: " + error);
-        }
-    }
-
-    function disconnectBluetooth() {
-        if (bluetoothDevice && bluetoothDevice.gatt.connected) {
-            bluetoothDevice.gatt.disconnect();
-        }
-    }
-
-    function onDisconnected() {
-        log("อุปกรณ์ถูกตัดการเชื่อมต่อ");
-        document.getElementById('statusDot').classList.remove('connected');
-        document.getElementById('statusText').innerText = 'ยังไม่ได้เชื่อมต่ออุปกรณ์';
-        document.getElementById('connectBtn').innerText = 'เชื่อมต่อบลูทูธ';
-        document.getElementById('connectBtn').onclick = connectBluetooth;
-        document.getElementById('syncBtn').disabled = true;
-        timeCharacteristic = null;
-    }
+            document
 </script>
 
 </body>
