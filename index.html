@@ -1,0 +1,38 @@
+// กำหนด Service และ Characteristic UUID ตามเฟิร์มแวร์ ESP32
+const SERVICE_UUID = "42a70001-e29f-412f-a2e6-7b5c87c0e001";
+const TIME_CHAR_UUID = "42a70002-e29f-412f-a2e6-7b5c87c0e001";
+
+let bluetoothDevice;
+let timeCharacteristic;
+
+async function connectSmartLid() {
+  try {
+    // 1. สแกนหาอุปกรณ์ชื่อ Smart-Thermos-Lid
+    console.log("กำลังค้นหาอุปกรณ์...");
+    bluetoothDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'Smart-Thermos-Lid' }],
+      optionalServices: [SERVICE_UUID]
+    });
+
+    // 2. เชื่อมต่อ GATT Server
+    const server = await bluetoothDevice.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    timeCharacteristic = await service.getCharacteristic(TIME_CHAR_UUID);
+    
+    alert("เชื่อมต่อสำเร็จ!");
+  } catch (error) {
+    console.log("เกิดข้อผิดพลาด: ", error);
+  }
+}
+
+async function syncCurrentTime() {
+  if (!timeCharacteristic) {
+    alert("ยังไม่ได้เชื่อมต่อบลูทูธ!");
+    return;
+  }
+  // ดึงเวลาปัจจุบันส่งไปให้ ESP32
+  let currentTime = new Date().toISOString();
+  let encoder = new TextEncoder();
+  await timeCharacteristic.writeValue(encoder.encode(currentTime));
+  alert("ซิงค์เวลาเรียบร้อย!");
+}
