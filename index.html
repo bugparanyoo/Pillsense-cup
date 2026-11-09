@@ -1,38 +1,211 @@
-// กำหนด Service และ Characteristic UUID ตามเฟิร์มแวร์ ESP32
-const SERVICE_UUID = "42a70001-e29f-412f-a2e6-7b5c87c0e001";
-const TIME_CHAR_UUID = "42a70002-e29f-412f-a2e6-7b5c87c0e001";
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Thermos Lid Control</title>
+    <style>
+        :root {
+            --primary-color: #0ea5e9;
+            --success-color: #10b981;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+        h2 {
+            margin-top: 0;
+            font-size: 1.25rem;
+            text-align: center;
+            color: #0f172a;
+        }
+        .status-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #cbd5e1;
+        }
+        .dot.connected {
+            background-color: var(--success-color);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 12px;
+        }
+        #connectBtn {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        #connectBtn:hover {
+            background-color: #0284c7;
+        }
+        #syncBtn {
+            background-color: var(--success-color);
+            color: white;
+        }
+        #syncBtn:hover {
+            background-color: #059669;
+        }
+        button:disabled {
+            background-color: #e2e8f0;
+            color: #94a3b8;
+            cursor: not-allowed;
+        }
+        .log-box {
+            background: #0f172a;
+            color: #38bdf8;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            height: 100px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
 
-let bluetoothDevice;
-let timeCharacteristic;
-
-async function connectSmartLid() {
-  try {
-    // 1. สแกนหาอุปกรณ์ชื่อ Smart-Thermos-Lid
-    console.log("กำลังค้นหาอุปกรณ์...");
-    bluetoothDevice = await navigator.bluetooth.requestDevice({
-      filters: [{ name: 'Smart-Thermos-Lid' }],
-      optionalServices: [SERVICE_UUID]
-    });
-
-    // 2. เชื่อมต่อ GATT Server
-    const server = await bluetoothDevice.gatt.connect();
-    const service = await server.getPrimaryService(SERVICE_UUID);
-    timeCharacteristic = await service.getCharacteristic(TIME_CHAR_UUID);
+<div class="container">
+    <h2>Smart Thermos Lid</h2>
     
-    alert("เชื่อมต่อสำเร็จ!");
-  } catch (error) {
-    console.log("เกิดข้อผิดพลาด: ", error);
-  }
-}
+    <div class="status-badge">
+        <div id="statusDot" class="dot"></div>
+        <span id="statusText">ยังไม่ได้เชื่อมต่ออุปกรณ์</span>
+    </div>
 
-async function syncCurrentTime() {
-  if (!timeCharacteristic) {
-    alert("ยังไม่ได้เชื่อมต่อบลูทูธ!");
-    return;
-  }
-  // ดึงเวลาปัจจุบันส่งไปให้ ESP32
-  let currentTime = new Date().toISOString();
-  let encoder = new TextEncoder();
-  await timeCharacteristic.writeValue(encoder.encode(currentTime));
-  alert("ซิงค์เวลาเรียบร้อย!");
-}
+    <button id="connectBtn" onclick="connectBluetooth()">เชื่อมต่อบลูทูธ</button>
+    <button id="syncBtn" onclick="syncTime()" disabled>ซิงค์เวลาปัจจุบัน</button>
+
+    <div class="log-box" id="logBox">
+        [System] พร้อมใช้งาน กรุณากดเชื่อมต่อบลูทูธ...
+    </div>
+</div>
+
+<script>
+    // UUIDs ตามโค้ดเฟิร์มแวร์ ESP32-C3 ของคุณ
+    const SERVICE_UUID = "42a70001-e29f-412f-a2e6-7b5c87c0e001";
+    const TIME_SYNC_CHAR_UUID = "42a70002-e29f-412f-a2e6-7b5c87c0e001";
+
+    let bluetoothDevice;
+    let timeCharacteristic;
+
+    function log(message) {
+        const box = document.getElementById('logBox');
+        box.innerHTML += `<br>> ${message}`;
+        box.scrollTop = box.scrollHeight;
+    }
+
+    async function connectBluetooth() {
+        try {
+            log("กำลังค้นหาอุปกรณ์ Smart-Thermos-Lid...");
+            
+            bluetoothDevice = await navigator.bluetooth.requestDevice({
+                filters: [{ name: 'Smart-Thermos-Lid' }],
+                optionalServices: [SERVICE_UUID]
+            });
+
+            bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+            log("กำลังเชื่อมต่อ GATT Server...");
+            const server = await bluetoothDevice.gatt.connect();
+
+            log("กำลังดึงข้อมูล Service...");
+            const service = await server.getPrimaryService(SERVICE_UUID);
+
+            log("กำลังดึง Characteristic สำหรับซิงค์เวลา...");
+            timeCharacteristic = await service.getCharacteristic(TIME_SYNC_CHAR_UUID);
+
+            // เปลี่ยนสถานะ UI
+            document.getElementById('statusDot').classList.add('connected');
+            document.getElementById('statusText').innerText = 'เชื่อมต่อสำเร็จ';
+            document.getElementById('connectBtn').innerText = 'ยกเลิกการเชื่อมต่อ';
+            document.getElementById('connectBtn').onclick = disconnectBluetooth;
+            document.getElementById('syncBtn').disabled = false;
+
+            log("เชื่อมต่อสำเร็จพร้อมใช้งาน!");
+
+        } catch (error) {
+            log("เกิดข้อผิดพลาด: " + error);
+        }
+    }
+
+    async function syncTime() {
+        if (!timeCharacteristic) {
+            alert("ยังไม่ได้เชื่อมต่อบลูทูธ!");
+            return;
+        }
+        try {
+            // ดึงค่า Unix Timestamp ปัจจุบัน (หน่วยวินาที)
+            let currentTimestamp = Math.floor(Date.now() / 1000);
+            
+            // แปลงเป็น ArrayBuffer (uint32_t 4 ไบต์) ตามโค้ดเฟิร์มแวร์ ESP32
+            let buffer = new ArrayBuffer(4);
+            let view = new DataView(buffer);
+            view.setUint32(0, currentTimestamp, true); // true = Little Endian
+
+            await timeCharacteristic.writeValue(buffer);
+            log("ซิงค์เวลา Unix Timestamp (" + currentTimestamp + ") สำเร็จ!");
+            alert("ซิงค์เวลาไปยังฝาแก้วเรียบร้อยแล้ว!");
+        } catch (error) {
+            log("ซิงค์เวลาล้มเหลว: " + error);
+        }
+    }
+
+    function disconnectBluetooth() {
+        if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+            bluetoothDevice.gatt.disconnect();
+        }
+    }
+
+    function onDisconnected() {
+        log("อุปกรณ์ถูกตัดการเชื่อมต่อ");
+        document.getElementById('statusDot').classList.remove('connected');
+        document.getElementById('statusText').innerText = 'ยังไม่ได้เชื่อมต่ออุปกรณ์';
+        document.getElementById('connectBtn').innerText = 'เชื่อมต่อบลูทูธ';
+        document.getElementById('connectBtn').onclick = connectBluetooth;
+        document.getElementById('syncBtn').disabled = true;
+        timeCharacteristic = null;
+    }
+</script>
+
+</body>
+</html>
