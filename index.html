@@ -3,206 +3,223 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pillsense Cup - Dashboard</title>
+    <title>Pillsense Cup Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .container { background: #ffffff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
-        h2 { color: #2c3e50; margin-bottom: 5px; }
-        .status { font-size: 14px; margin-bottom: 20px; padding: 6px; border-radius: 6px; display: inline-block; font-weight: bold; }
-        .disconnected { background: #ffebee; color: #c62828; }
-        .connected { background: #e8f5e9; color: #2e7d32; }
-        .card { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: left; }
-        .card h3 { margin-top: 0; font-size: 16px; color: #34495e; }
-        .value { font-size: 22px; font-weight: bold; color: #2980b9; }
-        .pill-status { display: flex; justify-content: space-between; margin: 8px 0; font-size: 14px; font-weight: bold; }
-        .taken { color: #27ae60; }
-        .pending { color: #e67e22; }
-        input[type="time"] { padding: 6px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; width: 40%; }
-        .schedule-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; }
-        button { background-color: #3498db; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 10px; transition: background 0.3s; }
-        button:hover { background-color: #2980b9; }
-        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        body { font-family: 'Prompt', sans-serif; }
     </style>
 </head>
-<body>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center p-4">
 
-<div class="container">
-    <h2>Pillsense Cup</h2>
-    <p>Smart Thermos & Pill Reminder</p>
-    
-    <div id="connectionStatus" class="status disconnected">สถานะ: ยังไม่ได้เชื่อมต่อ</div>
-
-    <button id="connectBtn" onclick="connectBLE()">เชื่อมต่ออุปกรณ์ (Connect BLE)</button>
-
-    <div class="card" style="margin-top: 20px;">
-        <h3>📊 ข้อมูลระดับน้ำ & สถานะยา</h3>
-        <p>ระดับน้ำ: <span id="waterLevel" class="value">-- %</span></p>
-        <hr style="border:0; border-top:1px solid #ddd; margin: 10px 0;">
-        <div class="pill-status"><span>มื้อเช้า:</span> <span id="statusMorning" class="pending">--</span></div>
-        <div class="pill-status"><span>มื้อกลางวัน:</span> <span id="statusNoon" class="pending">--</span></div>
-        <div class="pill-status"><span>มื้อเย็น:</span> <span id="statusEvening" class="pending">--</span></div>
-        <p style="font-size: 12px; color: #7f8c8d; margin-top: 10px;" id="lastUpdate">อัปเดตล่าสุดทุก 20 วินาที: --</p>
-    </div>
-
-    <div class="card">
-        <h3>⏰ ตั้งค่าเวลากินยา</h3>
-        <div class="schedule-row">
-            <span>มื้อเช้า:</span> <input type="time" id="timeMorning" value="08:00">
+    <div class="w-full max-w-md bg-slate-800 rounded-2xl shadow-xl p-6 border border-slate-700">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-xl font-bold text-cyan-400">Pillsense Cup</h1>
+            <button id="connectBtn" onclick="toggleBLEConnection()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition shadow-lg shadow-cyan-900/50">
+                Connect BLE
+            </button>
         </div>
-        <div class="schedule-row">
-            <span>มื้อกลางวัน:</span> <input type="time" id="timeNoon" value="12:30">
+
+        <!-- Connection Status -->
+        <div id="statusBadge" class="mb-6 p-3 bg-slate-900/60 rounded-xl border border-slate-700 flex items-center justify-between">
+            <span class="text-sm text-slate-400">สถานะการเชื่อมต่อ:</span>
+            <span id="connectionText" class="text-sm font-semibold text-rose-400">ยังไม่ได้เชื่อมต่อ</span>
         </div>
-        <div class="schedule-row">
-            <span>มื้อเย็น:</span> <input type="time" id="timeEvening" value="19:00">
+
+        <!-- Water Level Card -->
+        <div class="bg-slate-900/80 rounded-xl p-4 mb-6 border border-slate-700">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm text-slate-300">ระดับน้ำในแก้ว</span>
+                <span id="waterText" class="text-lg font-bold text-cyan-400">--%</span>
+            </div>
+            <div class="w-full bg-slate-700 h-3 rounded-full overflow-hidden">
+                <div id="waterBar" class="bg-cyan-500 h-full transition-all duration-500" style="width: 0%"></div>
+            </div>
         </div>
-        <button id="syncScheduleBtn" onclick="updateSchedule()" disabled>บันทึกเวลาไปยังแก้ว</button>
-    </div>
 
-    <div class="card">
-        <h3>⏱️ ซิงค์เวลานาฬิกา</h3>
-        <button id="syncTimeBtn" onclick="syncTime()" disabled>ซิงค์เวลาปัจจุบันจากมือถือ</button>
-    </div>
-</div>
+        <!-- Pill Slots Status (Limit Switch Status) -->
+        <h2 class="text-sm font-semibold text-slate-400 mb-3">สถานะตลับยามื้อวันนี้</h2>
+        <div class="grid grid-cols-3 gap-3 mb-6">
+            <div id="slotMorning" class="bg-slate-900/80 p-3 rounded-xl border border-slate-700 text-center">
+                <div class="text-xs text-slate-400 mb-1">มื้อเช้า</div>
+                <div id="statusMorningText" class="text-sm font-bold text-amber-400">รอทาน</div>
+            </div>
+            <div id="slotNoon" class="bg-slate-900/80 p-3 rounded-xl border border-slate-700 text-center">
+                <div class="text-xs text-slate-400 mb-1">กลางวัน</div>
+                <div id="statusNoonText" class="text-sm font-bold text-amber-400">รอทาน</div>
+            </div>
+            <div id="slotEvening" class="bg-slate-900/80 p-3 rounded-xl border border-slate-700 text-center">
+                <div class="text-xs text-slate-400 mb-1">มื้อเย็น</div>
+                <div id="statusEveningText" class="text-sm font-bold text-amber-400">รอทาน</div>
+            </div>
+        </div>
 
-<script>
-    const SERVICE_UUID = "42a70001-e29f-412f-a2e6-7b5c87c0e001";
-    const TIME_SYNC_UUID = "42a70002-e29f-412f-a2e6-7b5c87c0e001";
-    const TELEMETRY_UUID = "42a70003-e29f-412f-a2e6-7b5c87c0e001";
-    const SCHEDULE_UUID = "42a70004-e29f-412f-a2e6-7b5c87c0e001";
+        <!-- Next Alarm Info -->
+        <div class="bg-slate-900/80 rounded-xl p-4 mb-6 border border-slate-700 flex justify-between items-center">
+            <span class="text-sm text-slate-300">แจ้งเตือนมื้อถัดไป:</span>
+            <span id="nextAlarmText" class="text-base font-bold text-emerald-400">--:--</span>
+        </div>
 
-    let bluetoothDevice;
-    let telemetryCharacteristic;
-    let timeCharacteristic;
-    let scheduleCharacteristic;
-
-    async function connectBLE() {
-        try {
-            document.getElementById('connectionStatus').innerText = "กำลังค้นหาอุปกรณ์...";
+        <!-- Actions -->
+        <div class="space-y-3">
+            <button onclick="syncTime()" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 py-2.5 rounded-xl text-sm font-medium transition">
+                ซิงค์เวลาปัจจุบัน (Time Sync)
+            </button>
             
-            bluetoothDevice = await navigator.bluetooth.requestDevice({
-                filters: [{ name: 'Pillsense-Cup' }],
-                optionalServices: [SERVICE_UUID]
+            <div class="pt-2 border-t border-slate-700">
+                <h2 class="text-xs font-semibold text-slate-400 mb-2">ตั้งเวลาแจ้งเตือนใหม่</h2>
+                <div class="grid grid-cols-3 gap-2 mb-2">
+                    <input type="time" id="timeMorning" value="08:00" class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-center text-white">
+                    <input type="time" id="timeNoon" value="12:30" class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-center text-white">
+                    <input type="time" id="timeEvening" value="19:00" class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-center text-white">
+                </div>
+                <button onclick="updateSchedule()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-emerald-900/50">
+                    บันทึกตารางเวลา (Save Schedule)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SERVICE_UUID          = "42a70001-e29f-412f-a2e6-7b5c87c0e001";
+        const TIME_SYNC_CHAR_UUID   = "42a70002-e29f-412f-a2e6-7b5c87c0e001";
+        const TELEMETRY_CHAR_UUID   = "42a70003-e29f-412f-a2e6-7b5c87c0e001";
+        const SCHEDULE_CHAR_UUID    = "42a70004-e29f-412f-a2e6-7b5c87c0e001";
+
+        let bleDevice = null;
+        let telemetryCharacteristic = null;
+        let timeCharacteristic = null;
+        let scheduleCharacteristic = null;
+
+        async function toggleBLEConnection() {
+            if (!bleDevice || !bleDevice.gatt.connected) {
+                try {
+                    console.log('Requesting Bluetooth Device...');
+                    bleDevice = await navigator.bluetooth.requestDevice({
+                        filters: [{ name: 'Pillsense-Cup' }],
+                        optionalServices: [SERVICE_UUID]
+                    });
+
+                    bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                    console.log('Connecting to GATT Server...');
+                    const server = await bleDevice.gatt.connect();
+
+                    console.log('Getting Service...');
+                    const service = await server.getPrimaryService(SERVICE_UUID);
+
+                    telemetryCharacteristic = await service.getCharacteristic(TELEMETRY_CHAR_UUID);
+                    timeCharacteristic = await service.getCharacteristic(TIME_SYNC_CHAR_UUID);
+                    scheduleCharacteristic = await service.getCharacteristic(SCHEDULE_CHAR_UUID);
+
+                    await telemetryCharacteristic.startNotifications();
+                    telemetryCharacteristic.addEventListener('characteristicvaluechanged', handleTelemetryNotification);
+
+                    document.getElementById('connectionText').innerText = 'เชื่อมต่อแล้ว (Connected)';
+                    document.getElementById('connectionText').className = 'text-sm font-semibold text-emerald-400';
+                    document.getElementById('connectBtn').innerText = 'Disconnect';
+                    document.getElementById('connectBtn').className = 'bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition shadow-lg shadow-rose-900/50';
+
+                    // ซิงค์เวลาอัตโนมัติทันทีที่เชื่อมต่อ
+                    syncTime();
+
+                } catch (error) {
+                    console.error('BLE Connection failed: ', error);
+                    alert('เชื่อมต่อบลูทูธไม่สำเร็จ: ' + error);
+                }
+            } else {
+                if (bleDevice.gatt.connected) {
+                    bleDevice.gatt.disconnect();
+                }
+            }
+        }
+
+        function onDisconnected() {
+            document.getElementById('connectionText').innerText = 'ยังไม่ได้เชื่อมต่อ';
+            document.getElementById('connectionText').className = 'text-sm font-semibold text-rose-400';
+            document.getElementById('connectBtn').innerText = 'Connect BLE';
+            document.getElementById('connectBtn').className = 'bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition shadow-lg shadow-cyan-900/50';
+        }
+
+        function handleTelemetryNotification(event) {
+            const value = new TextDecoder().decode(event.target.value);
+            // Payload format: H2O:%d|M:%d|N:%d|E:%d|Next:%02d:%02d
+            const parts = value.split('|');
+            let data = {};
+            parts.forEach(p => {
+                let kv = p.split(':');
+                data[kv[0]] = kv[1];
             });
 
-            bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+            // Update Water
+            let h2o = data['H2O'] || 0;
+            document.getElementById('waterText').innerText = h2o + '%';
+            document.getElementById('waterBar').style.width = h2o + '%';
 
-            document.getElementById('connectionStatus').innerText = "กำลังเชื่อมต่อ GATT...";
-            const server = await bluetoothDevice.gatt.connect();
+            // Update Slots (M, N, E)
+            updateSlotUI('slotMorning', 'statusMorningText', data['M']);
+            updateSlotUI('slotNoon', 'statusNoonText', data['N']);
+            updateSlotUI('slotEvening', 'statusEveningText', data['E']);
 
-            document.getElementById('connectionStatus').innerText = "กำลังโหลด Service...";
-            const service = await server.getPrimaryService(SERVICE_UUID);
-
-            telemetryCharacteristic = await service.getCharacteristic(TELEMETRY_UUID);
-            timeCharacteristic = await service.getCharacteristic(TIME_SYNC_UUID);
-            scheduleCharacteristic = await service.getCharacteristic(SCHEDULE_UUID);
-
-            await telemetryCharacteristic.startNotifications();
-            telemetryCharacteristic.addEventListener('characteristicvaluechanged', handleTelemetryData);
-
-            document.getElementById('connectionStatus').innerText = "สถานะ: เชื่อมต่อสำเร็จ ✅";
-            document.getElementById('connectionStatus').className = "status connected";
-            document.getElementById('connectBtn').innerText = "ตัดการเชื่อมต่อ";
-            document.getElementById('connectBtn').onclick = disconnectBLE;
-            document.getElementById('syncTimeBtn').disabled = false;
-            document.getElementById('syncScheduleBtn').disabled = false;
-
-            syncTime();
-
-        } catch (error) {
-            console.error("Connection failed:", error);
-            alert("การเชื่อมต่อล้มเหลว: " + error);
-            document.getElementById('connectionStatus').innerText = "สถานะ: ยังไม่ได้เชื่อมต่อ";
+            // Update Next Alarm
+            if (data['Next']) {
+                document.getElementById('nextAlarmText').innerText = data['Next'];
+            }
         }
-    }
 
-    function handleTelemetryData(event) {
-        const rawValue = new TextDecoder().decode(event.target.value);
-        // ตัวอย่างรูปแบบข้อมูลที่รับมา: "H2O:75|M:1|N:0|E:0|Next:12:30"
-        try {
-            const parts = rawValue.split('|');
-            const h2o = parts[0].split(':')[1];
-            const morningTaken = parts[1].split(':')[1] === '1';
-            const noonTaken = parts[2].split(':')[1] === '1';
-            const eveningTaken = parts[3].split(':')[1] === '1';
-
-            document.getElementById('waterLevel').innerText = h2o + "%";
-            
-            updatePillStatusUI('statusMorning', morningTaken);
-            updatePillStatusUI('statusNoon', noonTaken);
-            updatePillStatusUI('statusEvening', eveningTaken);
-
-            const now = new Date();
-            document.getElementById('lastUpdate').innerText = "อัปเดตล่าสุด: " + now.toLocaleTimeString();
-        } catch(e) {
-            console.error("Parse telemetry error:", e);
+        function updateSlotUI(cardId, textId, statusVal) {
+            let card = document.getElementById(cardId);
+            let text = document.getElementById(textId);
+            if (statusVal === '1') {
+                card.className = "bg-emerald-950/40 p-3 rounded-xl border border-emerald-600/50 text-center";
+                text.innerText = "ทานแล้ว";
+                text.className = "text-sm font-bold text-emerald-400";
+            } else {
+                card.className = "bg-slate-900/80 p-3 rounded-xl border border-slate-700 text-center";
+                text.innerText = "รอทาน";
+                text.className = "text-sm font-bold text-amber-400";
+            }
         }
-    }
 
-    function updatePillStatusUI(elementId, isTaken) {
-        const el = document.getElementById(elementId);
-        if (isTaken) {
-            el.innerText = "ทานแล้ว ✅";
-            el.className = "taken";
-        } else {
-            el.innerText = "ยังไม่ทาน ⏳";
-            el.className = "pending";
+        async function syncTime() {
+            if (!timeCharacteristic) {
+                alert('ยังไม่ได้เชื่อมต่อบลูทูธ');
+                return;
+            }
+            try {
+                const timestamp = Math.floor(Date.now() / 1000);
+                const buffer = new ArrayBuffer(4);
+                new DataView(buffer).setUint32(0, timestamp, true);
+                await timeCharacteristic.writeValue(buffer);
+                alert('ซิงค์เวลาสำเร็จ!');
+            } catch (error) {
+                console.error('Time sync failed: ', error);
+            }
         }
-    }
 
-    async function syncTime() {
-        if (!timeCharacteristic) return;
-        try {
-            const unixTime = Math.floor(Date.now() / 1000);
-            const buffer = new ArrayBuffer(4);
-            const view = new DataView(buffer);
-            view.setUint32(0, unixTime, true);
+        async function updateSchedule() {
+            if (!scheduleCharacteristic) {
+                alert('ยังไม่ได้เชื่อมต่อบลูทูธ');
+                return;
+            }
+            try {
+                let mArr = document.getElementById('timeMorning').value.split(':');
+                let nArr = document.getElementById('timeNoon').value.split(':');
+                let eArr = document.getElementById('timeEvening').value.split(':');
 
-            await timeCharacteristic.writeValue(buffer);
-            alert("ซิงค์เวลาปัจจุบันสำเร็จ!");
-        } catch (error) {
-            console.error("Sync time failed:", error);
-            alert("ซิงค์เวลาไม่สำเร็จ: " + error);
+                let buffer = new Uint8Array([
+                    parseInt(mArr[0]), parseInt(mArr[1]),
+                    parseInt(nArr[0]), parseInt(nArr[1]),
+                    parseInt(eArr[0]), parseInt(eArr[1])
+                ]);
+
+                await scheduleCharacteristic.writeValue(buffer);
+                alert('บันทึกตารางเวลาสำเร็จ!');
+            } catch (error) {
+                console.error('Schedule update failed: ', error);
+            }
         }
-    }
-
-    async function updateSchedule() {
-        if (!scheduleCharacteristic) return;
-        try {
-            const mVal = document.getElementById('timeMorning').value.split(':');
-            const nVal = document.getElementById('timeNoon').value.split(':');
-            const eVal = document.getElementById('timeEvening').value.split(':');
-
-            // แพ็กข้อมูลเป็น Array 6 ไบต์ [ชม.เช้า, นาทีเช้า, ชม.กลางวัน, นาทีกลางวัน, ชม.เย็น, นาทีเย็น]
-            const buffer = new Uint8Array([
-                parseInt(mVal[0]), parseInt(mVal[1]),
-                parseInt(nVal[0]), parseInt(nVal[1]),
-                parseInt(eVal[0]), parseInt(eVal[1])
-            ]);
-
-            await scheduleCharacteristic.writeValue(buffer);
-            alert("บันทึกเวลากินยาไปยังแก้ว Pillsense Cup สำเร็จ!");
-        } catch (error) {
-            console.error("Update schedule failed:", error);
-            alert("บันทึกเวลาไม่สำเร็จ: " + error);
-        }
-    }
-
-    function disconnectBLE() {
-        if (bluetoothDevice && bluetoothDevice.gatt.connected) {
-            bluetoothDevice.gatt.disconnect();
-        }
-    }
-
-    function onDisconnected() {
-        document.getElementById('connectionStatus').innerText = "สถานะ: ตัดการเชื่อมต่อแล้ว ❌";
-        document.getElementById('connectionStatus').className = "status disconnected";
-        document.getElementById('connectBtn').innerText = "เชื่อมต่ออุปกรณ์ (Connect BLE)";
-        document.getElementById('connectBtn').onclick = connectBLE;
-        document.getElementById('syncTimeBtn').disabled = true;
-        document.getElementById('syncScheduleBtn').disabled = true;
-        document.getElementById('waterLevel').innerText = "-- %";
-    }
-</script>
-
+    </script>
 </body>
 </html>
