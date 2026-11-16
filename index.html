@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pillsense Cup Dashboard</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
@@ -38,7 +44,7 @@
             </div>
         </div>
 
-        <!-- Pill Slots Status (Limit Switch Status) -->
+        <!-- Pill Slots Status -->
         <h2 class="text-sm font-semibold text-slate-400 mb-3">สถานะตลับยามื้อวันนี้</h2>
         <div class="grid grid-cols-3 gap-3 mb-6">
             <div id="slotMorning" class="bg-slate-900/80 p-3 rounded-xl border border-slate-700 text-center">
@@ -81,6 +87,18 @@
         </div>
     </div>
 
+    <!-- Alert Modal -->
+    <div id="alertModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-slate-800 border border-rose-500/50 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div id="alertIcon" class="text-4xl mb-3">🚨</div>
+            <h3 id="alertTitle" class="text-lg font-bold text-rose-400 mb-2">ถึงเวลาทานยาแล้ว!</h3>
+            <p id="alertDesc" class="text-sm text-slate-300 mb-6">กรุณาหยิบยาตามช่องที่กำหนดและดื่มน้ำตาม</p>
+            <button onclick="closeAppAlert()" class="w-full bg-rose-600 hover:bg-rose-500 text-white py-2.5 rounded-xl font-medium transition">
+                รับทราบ / ปิดเสียง
+            </button>
+        </div>
+    </div>
+
     <script>
         const SERVICE_UUID          = "42a70001-e29f-412f-a2e6-7b5c87c0e001";
         const TIME_SYNC_CHAR_UUID   = "42a70002-e29f-412f-a2e6-7b5c87c0e001";
@@ -91,22 +109,61 @@
         let telemetryCharacteristic = null;
         let timeCharacteristic = null;
         let scheduleCharacteristic = null;
+        let audioCtx = null;
+        let alarmInterval = null;
+
+        function playWebAlertSound() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            if (alarmInterval) return;
+
+            alarmInterval = setInterval(() => {
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = 880;
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            }, 600);
+        }
+
+        function stopWebAlertSound() {
+            if (alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+            }
+        }
+
+        function showAppAlert(title, desc, isWrong = false) {
+            document.getElementById('alertTitle').innerText = title;
+            document.getElementById('alertDesc').innerText = desc;
+            document.getElementById('alertIcon').innerText = isWrong ? '⚠️' : '🚨';
+            document.getElementById('alertModal').classList.remove('hidden');
+            playWebAlertSound();
+        }
+
+        function closeAppAlert() {
+            document.getElementById('alertModal').classList.add('hidden');
+            stopWebAlertSound();
+        }
 
         async function toggleBLEConnection() {
             if (!bleDevice || !bleDevice.gatt.connected) {
                 try {
-                    console.log('Requesting Bluetooth Device...');
                     bleDevice = await navigator.bluetooth.requestDevice({
                         filters: [{ name: 'Pillsense-Cup' }],
                         optionalServices: [SERVICE_UUID]
                     });
 
                     bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
-                    console.log('Connecting to GATT Server...');
                     const server = await bleDevice.gatt.connect();
-
-                    console.log('Getting Service...');
                     const service = await server.getPrimaryService(SERVICE_UUID);
 
                     telemetryCharacteristic = await service.getCharacteristic(TELEMETRY_CHAR_UUID);
@@ -121,9 +178,7 @@
                     document.getElementById('connectBtn').innerText = 'Disconnect';
                     document.getElementById('connectBtn').className = 'bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition shadow-lg shadow-rose-900/50';
 
-                    // ซิงค์เวลาอัตโนมัติทันทีที่เชื่อมต่อ
                     syncTime();
-
                 } catch (error) {
                     console.error('BLE Connection failed: ', error);
                     alert('เชื่อมต่อบลูทูธไม่สำเร็จ: ' + error);
@@ -144,10 +199,8 @@
 
         function handleTelemetryNotification(event) {
             const value = new TextDecoder().decode(event.target.value);
-            // Payload format: H2O:%d|M:%d|N:%d|E:%d|Next:%02d:%02d
-            const parts = value.split('|');
             let data = {};
-            parts.forEach(p => {
+            value.split('|').forEach(p => {
                 let kv = p.split(':');
                 data[kv[0]] = kv[1];
             });
@@ -157,14 +210,24 @@
             document.getElementById('waterText').innerText = h2o + '%';
             document.getElementById('waterBar').style.width = h2o + '%';
 
-            // Update Slots (M, N, E)
-            updateSlotUI('slotMorning', 'statusMorningText', data['M']);
+            // Fixed Slot Mapping (สลับค่า M และ E ให้ตรงกับหน้าจอจริง)
+            updateSlotUI('slotMorning', 'statusMorningText', data['E']);
             updateSlotUI('slotNoon', 'statusNoonText', data['N']);
-            updateSlotUI('slotEvening', 'statusEveningText', data['E']);
+            updateSlotUI('slotEvening', 'statusEveningText', data['M']);
 
-            // Update Next Alarm
+            // Update Next Alarm & Trigger App Notification
             if (data['Next']) {
                 document.getElementById('nextAlarmText').innerText = data['Next'];
+                
+                let now = new Date();
+                let curTimeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+                
+                if (curTimeStr === data['Next'] && !window.alertTriggeredMin) {
+                    showAppAlert("ถึงเวลาทานยาแล้ว!", "กรุณาหยิบยาจากตลับ Pillsense Cup ทันที");
+                    window.alertTriggeredMin = curTimeStr;
+                } else if (curTimeStr !== data['Next']) {
+                    window.alertTriggeredMin = null;
+                }
             }
         }
 
@@ -183,16 +246,12 @@
         }
 
         async function syncTime() {
-            if (!timeCharacteristic) {
-                alert('ยังไม่ได้เชื่อมต่อบลูทูธ');
-                return;
-            }
+            if (!timeCharacteristic) return;
             try {
                 const timestamp = Math.floor(Date.now() / 1000);
                 const buffer = new ArrayBuffer(4);
                 new DataView(buffer).setUint32(0, timestamp, true);
                 await timeCharacteristic.writeValue(buffer);
-                alert('ซิงค์เวลาสำเร็จ!');
             } catch (error) {
                 console.error('Time sync failed: ', error);
             }
@@ -219,6 +278,12 @@
             } catch (error) {
                 console.error('Schedule update failed: ', error);
             }
+        }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(() => {
+                console.log('Service Worker Registered');
+            });
         }
     </script>
 </body>
