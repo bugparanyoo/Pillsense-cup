@@ -4,11 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pillsense Cup Dashboard</title>
-    
-    <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#0f172a">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon-192.png">
 
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -233,24 +229,24 @@
                 data[kv[0]] = kv[1];
             });
 
-            // Update Water
+            // อัปเดตระดับน้ำในแก้ว
             let h2o = data['H2O'] || 0;
             document.getElementById('waterText').innerText = h2o + '%';
             document.getElementById('waterBar').style.width = h2o + '%';
 
-            // Slot Mapping: M = มื้อเช้า, N = กลางวัน, E = มื้อเย็น
+            // จับคู่สถานะให้ตรงกับ ESP32: M = มื้อเช้า, N = กลางวัน, E = มื้อเย็น
             updateSlotUI('slotMorning', 'statusMorningText', data['M']);
             updateSlotUI('slotNoon', 'statusNoonText', data['N']);
             updateSlotUI('slotEvening', 'statusEveningText', data['E']);
 
-            // ปิดหน้าต่างแจ้งเตือนอัตโนมัติเมื่อมียอดจำนวนมื้อที่ทานแล้วเพิ่มขึ้น
+            // ปิดหน้าต่างแจ้งเตือนอัตโนมัติเมื่อมียอดมื้อที่ทานแล้วเพิ่มขึ้น
             let takenCount = (data['M'] === '1' ? 1 : 0) + (data['N'] === '1' ? 1 : 0) + (data['E'] === '1' ? 1 : 0);
             if (takenCount > prevTakenCount) {
                 closeAppAlert();
             }
             prevTakenCount = takenCount;
 
-            // Update Next Alarm
+            // ดึงค่าเวลาแจ้งเตือนมื้อถัดไปแบบเต็ม HH:MM
             if (data['Next']) {
                 let rawNext = value.split('Next:')[1] ? value.split('Next:')[1].trim() : data['Next'];
                 latestNextAlarm = rawNext;
@@ -311,12 +307,6 @@
             } catch (error) {
                 console.error('Schedule update failed: ', error);
             }
-        }
-
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').then(() => {
-                console.log('Service Worker Registered');
-            });
         }
     </script>
 </body>
