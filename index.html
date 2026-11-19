@@ -90,7 +90,7 @@
     <!-- Alert Modal -->
     <div id="alertModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
         <div class="bg-slate-800 border border-rose-500/50 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
-            <div id="alertIcon" class="text-4xl mb-3">🚨</div>
+            <div id="alertIcon" class="text-4xl mb-3 animate-bounce">🚨</div>
             <h3 id="alertTitle" class="text-lg font-bold text-rose-400 mb-2">ถึงเวลาทานยาแล้ว!</h3>
             <p id="alertDesc" class="text-sm text-slate-300 mb-6">กรุณาหยิบยาตามช่องที่กำหนดและดื่มน้ำตาม</p>
             <button onclick="closeAppAlert()" class="w-full bg-rose-600 hover:bg-rose-500 text-white py-2.5 rounded-xl font-medium transition">
@@ -111,27 +111,41 @@
         let scheduleCharacteristic = null;
         let audioCtx = null;
         let alarmInterval = null;
+        let latestNextAlarm = null;
+        let prevTakenCount = 0;
 
-        function playWebAlertSound() {
+        function unlockAudioContext() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
+        }
+
+        function playWebAlertSound() {
+            unlockAudioContext();
             if (alarmInterval) return;
 
-            alarmInterval = setInterval(() => {
+            const beepOnce = () => {
+                if (!audioCtx) return;
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
                 let osc = audioCtx.createOscillator();
                 let gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.value = 880;
-                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
                 osc.connect(gain);
                 gain.connect(audioCtx.destination);
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.2);
-            }, 600);
+                osc.stop(audioCtx.currentTime + 0.35);
+            };
+
+            beepOnce();
+            alarmInterval = setInterval(beepOnce, 900);
         }
 
         function stopWebAlertSound() {
@@ -155,6 +169,7 @@
         }
 
         async function toggleBLEConnection() {
+            unlockAudioContext();
             if (!bleDevice || !bleDevice.gatt.connected) {
                 try {
                     bleDevice = await navigator.bluetooth.requestDevice({
@@ -197,6 +212,19 @@
             document.getElementById('connectBtn').className = 'bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition shadow-lg shadow-cyan-900/50';
         }
 
+        function checkAlarmTimeTrigger() {
+            if (!latestNextAlarm) return;
+            let now = new Date();
+            let curTimeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+
+            if (curTimeStr === latestNextAlarm && !window.alertTriggeredMin) {
+                showAppAlert("ถึงเวลาทานยาแล้ว!", "กรุณาหยิบยาตามช่องที่กำหนดและดื่มน้ำตาม");
+                window.alertTriggeredMin = curTimeStr;
+            } else if (curTimeStr !== latestNextAlarm) {
+                window.alertTriggeredMin = null;
+            }
+        }
+
         function handleTelemetryNotification(event) {
             const value = new TextDecoder().decode(event.target.value);
             let data = {};
@@ -210,26 +238,29 @@
             document.getElementById('waterText').innerText = h2o + '%';
             document.getElementById('waterBar').style.width = h2o + '%';
 
-            // Fixed Slot Mapping (สลับค่า M และ E ให้ตรงกับหน้าจอจริง)
-            updateSlotUI('slotMorning', 'statusMorningText', data['E']);
+            // Slot Mapping: M = มื้อเช้า, N = กลางวัน, E = มื้อเย็น
+            updateSlotUI('slotMorning', 'statusMorningText', data['M']);
             updateSlotUI('slotNoon', 'statusNoonText', data['N']);
-            updateSlotUI('slotEvening', 'statusEveningText', data['M']);
+            updateSlotUI('slotEvening', 'statusEveningText', data['E']);
 
-            // Update Next Alarm & Trigger App Notification
+            // ปิดหน้าต่างแจ้งเตือนอัตโนมัติเมื่อมียอดจำนวนมื้อที่ทานแล้วเพิ่มขึ้น
+            let takenCount = (data['M'] === '1' ? 1 : 0) + (data['N'] === '1' ? 1 : 0) + (data['E'] === '1' ? 1 : 0);
+            if (takenCount > prevTakenCount) {
+                closeAppAlert();
+            }
+            prevTakenCount = takenCount;
+
+            // Update Next Alarm
             if (data['Next']) {
-                document.getElementById('nextAlarmText').innerText = data['Next'];
-                
-                let now = new Date();
-                let curTimeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-                
-                if (curTimeStr === data['Next'] && !window.alertTriggeredMin) {
-                    showAppAlert("ถึงเวลาทานยาแล้ว!", "กรุณาหยิบยาจากตลับ Pillsense Cup ทันที");
-                    window.alertTriggeredMin = curTimeStr;
-                } else if (curTimeStr !== data['Next']) {
-                    window.alertTriggeredMin = null;
-                }
+                let rawNext = value.split('Next:')[1] ? value.split('Next:')[1].trim() : data['Next'];
+                latestNextAlarm = rawNext;
+                document.getElementById('nextAlarmText').innerText = rawNext;
+                checkAlarmTimeTrigger();
             }
         }
+
+        // ตรวจเช็กเวลาทุก 1 วินาที เพื่อไม่ให้พลาดจังหวะขึ้นนาทีใหม่แม้ BLE ส่งทุก 20 วินาที
+        setInterval(checkAlarmTimeTrigger, 1000);
 
         function updateSlotUI(cardId, textId, statusVal) {
             let card = document.getElementById(cardId);
@@ -246,6 +277,7 @@
         }
 
         async function syncTime() {
+            unlockAudioContext();
             if (!timeCharacteristic) return;
             try {
                 const timestamp = Math.floor(Date.now() / 1000);
@@ -258,6 +290,7 @@
         }
 
         async function updateSchedule() {
+            unlockAudioContext();
             if (!scheduleCharacteristic) {
                 alert('ยังไม่ได้เชื่อมต่อบลูทูธ');
                 return;
